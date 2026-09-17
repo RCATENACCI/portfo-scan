@@ -31,11 +31,14 @@ from portfoscan.news import (
     get_ecb_deposit_rate,
     get_fed_funds_target_range,
     get_fed_meeting_probabilities,
+    get_relevant_portfolio_calendar,
     get_ticker_news,
     next_meeting,
     search_news,
     search_news_topics,
     time_ago,
+    get_portfolio_upcoming_events,
+    get_ticker_upcoming_events,
 )
 from portfoscan.parser import BUY_TYPES, SELL_TYPES, find_unknown_types, load_transactions
 from portfoscan.performance import (
@@ -109,6 +112,9 @@ if st.sidebar.button("🔄 Refresh live prices"):
     get_ticker_info.clear()
     search_news.clear()
     get_ticker_news.clear()
+    get_relevant_portfolio_calendar.clear()
+    get_portfolio_upcoming_events.clear()
+    get_ticker_upcoming_events.clear()
 
 st.sidebar.divider()
 st.sidebar.caption(
@@ -441,7 +447,7 @@ with tab_overview:
 
 with tab_news:
     now_utc = pd.Timestamp.now(tz="UTC")
-    today = pd.Timestamp.now().normalize()
+    today = pd.Timestamp.now(tz="UTC").normalize()
 
     st.subheader("🌍 Economy Overview")
     st.caption(
@@ -560,50 +566,280 @@ with tab_news:
                 st.caption(f"Source: {h['source']} · {time_ago(h['published'], now_utc)}")
 
     st.divider()
-    st.subheader("📁 Your Portfolio News")
-    st.caption(
-        "Recent headlines for each open position in your uploaded portfolio, pulled from Yahoo Finance's "
-        "per-security news feed — this section is generic and adapts automatically to whatever's in your CSV."
-    )
 
-    news_tickers = sorted(open_positions.keys())
-    if not news_tickers:
-        st.info("No open positions to show news for.")
-    else:
+    news_col, events_col = st.columns(2, gap="large")
 
-        def _ticker_label(t: str) -> str:
-            name = company_names.get(t, t)
-            return f"{t} — {name}" if name != t else t
 
-        ALL_HOLDINGS = "All holdings"
-        choice = st.selectbox(
-            "Filter by holding",
-            [ALL_HOLDINGS] + news_tickers,
-            format_func=lambda t: t if t == ALL_HOLDINGS else _ticker_label(t),
+    # ============================================================================
+    # LEFT COLUMN — per-holding recent news
+    # ============================================================================
+    with news_col:
+        st.subheader("📁 Your Portfolio News")
+        st.caption(
+            "Recent headlines for each open position in your uploaded portfolio, "
+            "pulled from Yahoo Finance's per-security news feed."
         )
-        tickers_to_show = news_tickers if choice == ALL_HOLDINGS else [choice]
-        per_ticker_count = 3 if choice == ALL_HOLDINGS else 8
 
-        found_any = False
-        for ticker in tickers_to_show:
-            if ticker in open_bond_tickers:
-                st.markdown(f"**{_ticker_label(ticker)}**")
-                st.caption(
-                    "No news feed available for bonds — Yahoo Finance doesn't index bond CUSIPs/ISINs. "
-                    "Try the Economy Overview above, or search the issuer/benchmark directly."
+        news_tickers = sorted(open_positions.keys())
+
+        if not news_tickers:
+            st.info("No open positions to show news for.")
+
+        else:
+            def _ticker_label(t: str) -> str:
+                name = company_names.get(t, t)
+                return f"{t} — {name}" if name != t else t
+
+            ALL_HOLDINGS = "All holdings"
+
+            choice = st.selectbox(
+                "Filter by holding",
+                [ALL_HOLDINGS] + news_tickers,
+                format_func=lambda t: (
+                    t if t == ALL_HOLDINGS else _ticker_label(t)
+                ),
+                key="portfolio_news_holding_filter",
+            )
+
+            tickers_to_show = (
+                news_tickers
+                if choice == ALL_HOLDINGS
+                else [choice]
+            )
+
+            per_ticker_count = 3 if choice == ALL_HOLDINGS else 8
+            found_any = False
+
+            for ticker in tickers_to_show:
+                if ticker in open_bond_tickers:
+                    st.markdown(f"**{_ticker_label(ticker)}**")
+                    st.caption(
+                        "No Yahoo Finance per-security news feed is available "
+                        "for bond CUSIPs/ISINs."
+                    )
+                    continue
+
+                headlines = get_ticker_news(
+                    ticker,
+                    count=per_ticker_count,
                 )
-                continue
-            headlines = get_ticker_news(ticker, count=per_ticker_count)
-            if not headlines:
-                continue
-            found_any = True
-            st.markdown(f"**{_ticker_label(ticker)}**")
-            for h in headlines:
-                st.markdown(f"[{h['title']}]({h['url']})")
-                st.caption(f"Source: {h['source']} · {time_ago(h['published'], now_utc)}")
 
-        if not found_any and not all(t in open_bond_tickers for t in tickers_to_show):
-            st.info("No recent news found for the selected holding(s).")
+                if not headlines:
+                    continue
+
+                found_any = True
+                st.markdown(f"**{_ticker_label(ticker)}**")
+
+                for headline in headlines:
+                    st.markdown(
+                        f"[{headline['title']}]({headline['url']})"
+                    )
+                    st.caption(
+                        f"Source: {headline['source']} · "
+                        f"{time_ago(headline['published'], now_utc)}"
+                    )
+
+            if (
+                not found_any
+                and not all(
+                    ticker in open_bond_tickers
+                    for ticker in tickers_to_show
+                )
+            ):
+                st.info(
+                    "No recent news found for the selected holding(s)."
+                )
+
+
+    # ============================================================================
+    # RIGHT COLUMN — upcoming earnings + macro calendar
+    # ============================================================================
+    with events_col:
+        st.subheader("📅 Upcoming Portfolio Events")
+        st.caption(
+            "Upcoming earnings for open holdings, plus scheduled FOMC and ECB "
+            "monetary-policy meetings."
+        )
+
+        calendar_days = st.selectbox(
+            "Calendar horizon",
+            options=[30, 60, 90, 180],
+            index=2,
+            format_func=lambda value: f"Next {value} days",
+            key="portfolio_calendar_horizon",
+        )
+
+        # Yahoo's earnings calendar is not suitable for bond CUSIPs or ISINs.
+        # Macro meetings remain included, since rates affect bonds and equities.
+        calendar_tickers = sorted(
+            set(open_positions) - set(open_bond_tickers)
+        )
+
+        with st.spinner("Loading upcoming events..."):
+            calendar_events = get_relevant_portfolio_calendar(
+                tickers=calendar_tickers,
+                today=today,
+                days_ahead=calendar_days,
+            )
+
+        if not calendar_events:
+            st.info(
+                "No upcoming earnings or central-bank meetings were found "
+                "within the selected horizon."
+            )
+
+        else:
+            calendar_df = pd.DataFrame(calendar_events).copy()
+
+            calendar_df["date"] = pd.to_datetime(
+                calendar_df["date"],
+                utc=True,
+                errors="coerce",
+            )
+
+            if "end_date" in calendar_df.columns:
+                calendar_df["end_date"] = pd.to_datetime(
+                    calendar_df["end_date"],
+                    utc=True,
+                    errors="coerce",
+                )
+
+            def calendar_holding_label(row: pd.Series) -> str:
+                if row["ticker"] == "MACRO":
+                    return "Macro"
+
+                name = company_names.get(
+                    row["ticker"],
+                    row["ticker"],
+                )
+
+                return (
+                    f"{row['ticker']} — {name}"
+                    if name != row["ticker"]
+                    else row["ticker"]
+                )
+
+            def calendar_display_date(row: pd.Series) -> str:
+                # FOMC/BCE dates are official calendar dates, not a precise
+                # timestamp. Do not convert their midnight UTC representation
+                # to Montréal time, otherwise it would display the prior day.
+                if row["ticker"] == "MACRO":
+                    return row["date"].strftime("%a, %b %d, %Y")
+
+                return (
+                    row["date"]
+                    .tz_convert("America/Toronto")
+                    .strftime("%a, %b %d, %Y")
+                )
+
+            calendar_df["Date"] = calendar_df.apply(
+                calendar_display_date,
+                axis=1,
+            )
+
+            calendar_df["Holding"] = calendar_df.apply(
+                calendar_holding_label,
+                axis=1,
+            )
+
+            calendar_df["Event"] = calendar_df["event_type"]
+
+            calendar_df["Details"] = calendar_df.apply(
+                lambda row: (
+                    f"{row['timing']} · EPS est. "
+                    f"{row['eps_estimate']:.2f}"
+                    if pd.notna(row.get("eps_estimate"))
+                    else row.get("timing", "—")
+                ),
+                axis=1,
+            )
+
+            calendar_df["Source"] = calendar_df["source_name"]
+            calendar_df["Link"] = calendar_df["source_url"]
+
+            available_event_types = (
+                calendar_df["Event"]
+                .dropna()
+                .unique()
+                .tolist()
+            )
+
+            event_filter = st.multiselect(
+                "Event types",
+                options=available_event_types,
+                default=available_event_types,
+                key="portfolio_calendar_event_filter",
+            )
+
+            filtered_calendar = (
+                calendar_df[
+                    calendar_df["Event"].isin(event_filter)
+                ]
+                .sort_values("date")
+                .copy()
+            )
+
+            if filtered_calendar.empty:
+                st.info("No events match the selected filters.")
+
+            else:
+                # Timeline appears before the detailed table.
+                st.markdown("**Timeline**")
+
+                for event_date, day_events in filtered_calendar.groupby(
+                    "Date",
+                    sort=False,
+                ):
+                    st.markdown(f"#### {event_date}")
+
+                    for _, event in day_events.iterrows():
+                        st.markdown(
+                            f"[{event['Event']}]({event['Link']}) — "
+                            f"**{event['Holding']}**"
+                        )
+
+                        detail_parts = []
+
+                        if pd.notna(event.get("Details")):
+                            detail_parts.append(str(event["Details"]))
+
+                        if pd.notna(event.get("Source")):
+                            detail_parts.append(
+                                f"Source: {event['Source']}"
+                            )
+
+                        if detail_parts:
+                            st.caption(" · ".join(detail_parts))
+
+                with st.expander("Detailed calendar", expanded=False):
+                    st.dataframe(
+                        filtered_calendar[
+                            [
+                                "Date",
+                                "Holding",
+                                "Event",
+                                "Details",
+                                "Source",
+                                "Link",
+                            ]
+                        ],
+                        width="stretch",
+                        hide_index=True,
+                        column_config={
+                            "Link": st.column_config.LinkColumn(
+                                "Source link",
+                                display_text="Open",
+                            ),
+                        },
+                    )
+
+                st.caption(
+                    "Earnings dates come from Yahoo Finance and may change "
+                    "until a company confirms them. FOMC and ECB dates come "
+                    "from official central-bank calendars."
+                )
+    
+    
 
 with tab_detail:
     all_tickers = sorted(set(positions.keys()) - set(bond_positions))

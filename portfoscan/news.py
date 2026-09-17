@@ -26,6 +26,9 @@ import requests
 import streamlit as st
 import yfinance as yf
 
+from datetime import date, timedelta
+from typing import Any
+
 from .prices import to_yahoo_symbol
 
 FRED_CSV_URL = "https://fred.stlouisfed.org/graph/fredgraph.csv?id={series}"
@@ -63,15 +66,32 @@ ECB_MEETINGS = [
 ECB_SOURCE_URL = "https://www.ecb.europa.eu/press/calendars/mgcgc/html/index.en.html"
 
 
-def next_meeting(meetings: list[tuple[str, str]], today: pd.Timestamp) -> tuple[pd.Timestamp, pd.Timestamp] | None:
-    """First meeting (start, end) that hasn't ended yet, or None if `today`
-    is past every date on file — happens once the hand-maintained table
-    above runs out, not from a fetch failure."""
+def next_meeting(
+    meetings: list[tuple[str, str]],
+    today: pd.Timestamp,
+) -> tuple[pd.Timestamp, pd.Timestamp] | None:
+    """
+    Renvoie la première réunion dont la date de fin n'est pas dépassée.
+
+    Toutes les dates sont normalisées en UTC afin d'éviter une comparaison
+    entre timestamps timezone-aware et timezone-naive.
+    """
+    today = pd.Timestamp(today)
+
+    if today.tzinfo is None:
+        today = today.tz_localize("UTC")
+    else:
+        today = today.tz_convert("UTC")
+
     today = today.normalize()
+
     for start, end in meetings:
-        end_ts = pd.Timestamp(end)
+        start_ts = pd.Timestamp(start, tz="UTC")
+        end_ts = pd.Timestamp(end, tz="UTC")
+
         if end_ts >= today:
-            return pd.Timestamp(start), end_ts
+            return start_ts, end_ts
+
     return None
 
 
@@ -396,6 +416,238 @@ def get_ticker_news(ticker: str, count: int = 5) -> list[dict]:
     items = [item for r in raw_results if (item := _normalize_ticker_item(r)) is not None]
     return _sort_recent_first(items)[:count]
 
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def get_ticker_upcoming_events(
+    ticker: str,
+    days_ahead: int = 180,
+    limit: int = 12,
+) -> list[dict]:
+    """
+    Retourne les publications de résultats futures disponibles dans Yahoo
+    Finance pour un titre.
+
+    Les dates Yahoo sont parfois indicatives jusqu'à confirmation officielle
+    par la société. Les erreurs ou titres non couverts retournent [] pour ne
+    jamais interrompre l'onglet News.
+    """
+    yahoo_symbol = to_yahoo_symbol(ticker)
+    today = pd.Timestamp.now(tz="UTC").normalize()
+    end_date = today + pd.Timedelta(days=days_ahead)
+
+    try:
+        earnings = yf.Ticker(yahoo_symbol).get_earnings_dates(limit=limit)
+    except Exception:
+        return []
+
+    if earnings is None or earnings.empty:
+        return []
+
+    events: list[dict] = []
+
+    for index, row in earnings.iterrows():
+        try:
+            event_date = pd.Timestamp(index)
+
+            if event_date.tzinfo is None:
+                event_date = event_date.tz_localize("UTC")
+            else:
+                event_date = event_date.tz_convert("UTC")
+
+            event_day = event_date.normalize()
+        except Exception:
+            continue
+
+        if event_day < today or event_day > end_date:
+            continue
+
+        hour = event_date.hour
+        minute = event_date.minute
+
+        if hour == 0 and minute == 0:
+            timing = "Time not specified"
+        elif hour < 9 or (hour == 9 and minute < 30):
+            timing = "Before market open"
+        elif hour >= 16:
+            timing = "After market close"
+        else:
+            timing = event_date.strftime("%H:%M UTC")
+
+        eps_estimate = row.get("EPS Estimate")
+        reported_eps = row.get("Reported EPS")
+        surprise_pct = row.get("Surprise(%)")
+
+        events.append(
+            {
+                "ticker": ticker,
+                "yahoo_symbol": yahoo_symbol,
+                "event_type": "Earnings",
+                "date": event_date,
+                "timing": timing,
+                "eps_estimate": (
+                    float(eps_estimate)
+                    if pd.notna(eps_estimate)
+                    else None
+                ),
+                "reported_eps": (
+                    float(reported_eps)
+                    if pd.notna(reported_eps)
+                    else None
+                ),
+                "surprise_pct": (
+                    float(surprise_pct)
+                    if pd.notna(surprise_pct)
+                    else None
+                ),
+                "source_name": "Yahoo Finance",
+                "source_url": (
+                    f"https://finance.yahoo.com/quote/{yahoo_symbol}"
+                ),
+            }
+        )
+
+    return sorted(events, key=lambda event: event["date"])
+
+
+def get_portfolio_upcoming_events(
+    tickers: list[str],
+    days_ahead: int = 180,
+    per_ticker_limit: int = 12,
+) -> list[dict]:
+    """
+    Agrège les prochains résultats de toutes les positions ouvertes.
+
+    Les tickers sont dédupliqués afin qu'une même action ne génère jamais
+    plusieurs séries d'appels Yahoo Finance.
+    """
+    seen: set[str] = set()
+    events: list[dict] = []
+
+    for ticker in tickers:
+        ticker = str(ticker).strip().upper()
+
+        if not ticker or ticker in seen:
+            continue
+
+        seen.add(ticker)
+
+        events.extend(
+            get_ticker_upcoming_events(
+                ticker=ticker,
+                days_ahead=days_ahead,
+                limit=per_ticker_limit,
+            )
+        )
+
+    return sorted(
+        events,
+        key=lambda event: (event["date"], event["ticker"]),
+    )
+
+
+def get_macro_upcoming_events(
+    today: pd.Timestamp,
+    days_ahead: int = 180,
+) -> list[dict]:
+    """
+    Convertit les réunions FOMC et BCE en événements timezone-aware UTC,
+    compatibles avec les dates d'earnings Yahoo Finance.
+
+    Les réunions sont des événements de date, sans heure officielle précise
+    dans cette table. Elles sont donc stockées à minuit UTC afin que toutes
+    les dates du calendrier soient comparables et triables.
+    """
+    today = pd.Timestamp(today)
+
+    if today.tzinfo is None:
+        today = today.tz_localize("UTC")
+    else:
+        today = today.tz_convert("UTC")
+
+    today = today.normalize()
+    horizon = today + pd.Timedelta(days=days_ahead)
+
+    events: list[dict] = []
+
+    for start_str, end_str in FOMC_MEETINGS:
+        start = pd.Timestamp(start_str, tz="UTC")
+        end = pd.Timestamp(end_str, tz="UTC")
+
+        if end < today or start > horizon:
+            continue
+
+        events.append(
+            {
+                "ticker": "MACRO",
+                "yahoo_symbol": None,
+                "event_type": "FOMC meeting",
+                "date": start,
+                "end_date": end,
+                "timing": "Rate decision expected on final meeting day",
+                "eps_estimate": None,
+                "reported_eps": None,
+                "surprise_pct": None,
+                "source_name": "Federal Reserve",
+                "source_url": FOMC_SOURCE_URL,
+            }
+        )
+
+    for start_str, end_str in ECB_MEETINGS:
+        start = pd.Timestamp(start_str, tz="UTC")
+        end = pd.Timestamp(end_str, tz="UTC")
+
+        if end < today or start > horizon:
+            continue
+
+        events.append(
+            {
+                "ticker": "MACRO",
+                "yahoo_symbol": None,
+                "event_type": "ECB monetary policy meeting",
+                "date": start,
+                "end_date": end,
+                "timing": "Policy decision expected on final meeting day",
+                "eps_estimate": None,
+                "reported_eps": None,
+                "surprise_pct": None,
+                "source_name": "European Central Bank",
+                "source_url": ECB_SOURCE_URL,
+            }
+        )
+
+    return sorted(events, key=lambda event: event["date"])
+
+def get_relevant_portfolio_calendar(
+    tickers: list[str],
+    today: pd.Timestamp,
+    days_ahead: int = 90,
+) -> list[dict]:
+    """
+    Calendrier unique pour l'onglet News :
+    résultats futurs par position + réunions FOMC/BCE.
+
+    Les titres qui ne possèdent pas de calendrier Yahoo — notamment les
+    CUSIPs/ISINs obligataires — n'empêchent pas l'affichage du calendrier
+    macro.
+    """
+    earnings_events = get_portfolio_upcoming_events(
+        tickers=tickers,
+        days_ahead=days_ahead,
+    )
+
+    macro_events = get_macro_upcoming_events(
+        today=today,
+        days_ahead=days_ahead,
+    )
+
+    return sorted(
+        earnings_events + macro_events,
+        key=lambda event: (
+            event["date"],
+            event["event_type"],
+            event["ticker"],
+        ),
+    )
 
 def time_ago(published: pd.Timestamp | None, now: pd.Timestamp) -> str:
     """Short relative-age string ('3h ago', '2d ago') for a headline's
