@@ -288,7 +288,7 @@ with tab_overview:
             )
             fig.update_layout(margin=dict(t=10, b=10, l=10, r=10))
             style_fig(fig)
-            treemap_event = st.plotly_chart(fig, use_container_width=True, on_select="rerun", key="allocation_treemap")
+            treemap_event = st.plotly_chart(fig, width='stretch', on_select="rerun", key="allocation_treemap")
             clicked = treemap_event.selection.points[0]["label"] if treemap_event and treemap_event.selection and treemap_event.selection.points else None
             if clicked and clicked != st.session_state.get("_last_treemap_ticker"):
                 st.session_state["selected_ticker"] = clicked
@@ -342,7 +342,7 @@ with tab_overview:
                     f"deposits/withdrawals since {perf_start.date()} — into {BENCHMARK_NAME} instead of your stock "
                     "picks. Both lines are real dollars, so they're directly comparable without any indexing."
                 )
-                st.plotly_chart(perf_fig, use_container_width=True)
+                st.plotly_chart(perf_fig, width='stretch')
 
                 final_actual = portfolio_value.dropna().iloc[-1]
                 final_shadow = shadow_value.dropna().iloc[-1]
@@ -372,12 +372,12 @@ with tab_overview:
     bar_fig.update_layout(margin=dict(t=10, b=10, l=10, r=120), xaxis_title="Market Value ($)", yaxis_title=None)
     bar_fig.update_yaxes(autorange="reversed")
     style_fig(bar_fig)
-    st.plotly_chart(bar_fig, use_container_width=True)
+    st.plotly_chart(bar_fig, width='stretch')
 
     sector_display = sector_df.copy()
     sector_display["Amount"] = sector_display["Amount"].map(money)
     sector_display["Percentage"] = sector_display["Percentage"].map(lambda v: f"{v:.2f}%")
-    st.dataframe(sector_display, use_container_width=True, hide_index=True)
+    st.dataframe(sector_display, width='stretch', hide_index=True)
 
     st.subheader("Holdings")
     display_df = holdings_df.copy()
@@ -388,7 +388,7 @@ with tab_overview:
 
     table_event = st.dataframe(
         display_df,
-        use_container_width=True,
+        width='stretch',
         hide_index=True,
         on_select="rerun",
         selection_mode="single-row",
@@ -407,7 +407,7 @@ with tab_overview:
                     for t, p in closed_positions.items()
                 ]
             )
-            st.dataframe(closed_df, use_container_width=True, hide_index=True)
+            st.dataframe(closed_df, width='stretch', hide_index=True)
 
     stock_tickers = sorted(set(open_positions) - open_bond_tickers)
     if len(stock_tickers) >= 2:
@@ -435,7 +435,7 @@ with tab_overview:
             )
             corr_fig.update_layout(margin=dict(t=10, b=10, l=10, r=10), coloraxis_colorbar_title="")
             style_fig(corr_fig)
-            st.plotly_chart(corr_fig, use_container_width=True)
+            st.plotly_chart(corr_fig, width='stretch')
         else:
             st.info("Not enough price history to compute correlations yet.")
 
@@ -517,7 +517,7 @@ with tab_news:
             xaxis=dict(visible=False, range=[0, 100]),
             yaxis=dict(visible=False),
         )
-        st.plotly_chart(style_fig(odds_fig), use_container_width=True, config={"displayModeBar": False})
+        st.plotly_chart(style_fig(odds_fig), width='stretch', config={"displayModeBar": False})
         per_source = " · ".join(
             f"[{s['source_name']}]({s['source_url']}) — cut {s['cut']:.0f}% / hold {s['hold']:.0f}% / hike {s['hike']:.0f}%"
             for s in fed_odds["sources"]
@@ -687,7 +687,7 @@ with tab_detail:
                     yaxis_tickformat=".1%",
                 )
                 style_fig(scatter_fig)
-                st.plotly_chart(scatter_fig, use_container_width=True)
+                st.plotly_chart(scatter_fig, width='stretch')
             else:
                 st.info("Not enough overlapping price history to compute beta.")
         else:
@@ -714,7 +714,7 @@ with tab_detail:
                     f"in {selected}. Assumes a single buy-and-hold from that date, so it won't reflect the exact "
                     "return of positions built up over several trades."
                 )
-                st.plotly_chart(perf_fig, use_container_width=True)
+                st.plotly_chart(perf_fig, width='stretch')
 
                 sc1, sc2 = st.columns(2)
                 sc1.metric(selected, pct(stock_index.dropna().iloc[-1] - 100))
@@ -747,7 +747,7 @@ with tab_detail:
                 ))
             fig.update_layout(margin=dict(t=10, b=10, l=10, r=10), legend=dict(orientation="h"))
             style_fig(fig)
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
         else:
             st.info("No price history available for this ticker.")
 
@@ -762,7 +762,7 @@ with tab_detail:
                 trades_display[["date", "type", "quantity", "price_usd", "amount_usd"]].rename(
                     columns={"date": "Date", "type": "Type", "quantity": "Quantity", "price_usd": "Price", "amount_usd": "Amount"}
                 ),
-                use_container_width=True,
+                width='stretch',
                 hide_index=True,
             )
 
@@ -884,14 +884,14 @@ if tab_bonds is not None:
                         barmode="overlay",
                     )
                     style_fig(cash_fig)
-                    st.plotly_chart(cash_fig, use_container_width=True)
+                    st.plotly_chart(cash_fig, width='stretch')
 
                     schedule_display = schedule.copy()
                     schedule_display["date"] = schedule_display["date"].dt.strftime("%Y-%m-%d")
                     schedule_display["amount"] = schedule_display["amount"].map(money)
                     st.dataframe(
                         schedule_display.rename(columns={"date": "Date", "amount": "Per Unit", "type": "Type", "status": "Status"}),
-                        use_container_width=True,
+                        width='stretch',
                         hide_index=True,
                     )
 
@@ -906,7 +906,7 @@ if tab_bonds is not None:
                     bond_trades_display[["date", "type", "quantity", "price_usd", "amount_usd"]].rename(
                         columns={"date": "Date", "type": "Type", "quantity": "Quantity", "price_usd": "Price", "amount_usd": "Amount"}
                     ),
-                    use_container_width=True,
+                    width='stretch',
                     hide_index=True,
                 )
 
@@ -938,6 +938,6 @@ with tab_transactions:
                 "price": "Price", "amount": "Amount", "currency": "Currency", "amount_usd": "Amount (USD)",
             }
         ),
-        use_container_width=True,
+        width='stretch',
         hide_index=True,
     )
