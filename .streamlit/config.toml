@@ -1,29 +1,63 @@
 [theme]
-base = "dark"
-primaryColor = "#5b8def"
-backgroundColor = "#0a0b0d"
-secondaryBackgroundColor = "#131417"
-textColor = "#f2f3f5"
-borderColor = "#24262b"
-linkColor = "#5b8def"
-greenColor = "#22c55e"
-redColor = "#ef4444"
-font = "Inter:https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
-baseRadius = "0.6rem"
-buttonRadius = "0.6rem"
+base = "light"
+
+# Couleur d’accent principale :
+# --burgundy: #4a0718
+primaryColor = "#4a0718"
+linkColor = "#4a0718"
+
+# Fond global :
+# --cream: #f4f0e8
+backgroundColor = "#f4f0e8"
+
+# Surfaces : sidebar, conteneurs, widgets, tableaux, etc.
+# --cream-light: #faf8f3
+secondaryBackgroundColor = "#faf8f3"
+
+# Texte :
+# --text: #291d20
+textColor = "#291d20"
+
+# Bordures :
+# --border: #d8cfc5
+borderColor = "#d8cfc5"
+dataframeBorderColor = "#d8cfc5"
+
+# Sémantique pour statuts / métriques
+greenColor = "#6d8f5c"
+redColor = "#b4233c"
+
+font = "Inter:https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+
+# Ton CSS utilise 14 px globalement.
+baseRadius = "0.875rem"
+buttonRadius = "0.5rem"
+
 showWidgetBorder = true
 showSidebarBorder = true
-dataframeBorderColor = "#24262b"
+
 metricValueFontWeight = 700
 headingFontWeights = [700, 600, 600, 600, 600, 600]
 
-# Overrides applied if a visitor's browser/settings prefer light mode —
-# matches the same palette used on elouanbahri.com for consistency.
-[theme.light]
-primaryColor = "#2f6feb"
-backgroundColor = "#ffffff"
-secondaryBackgroundColor = "#f7f8fa"
-textColor = "#0a0b0d"
-borderColor = "#e7e9ec"
-linkColor = "#2f6feb"
-dataframeBorderColor = "#e7e9ec"
+# Variante optionnelle si le navigateur est en dark mode :
+# elle conserve le bordeaux comme couleur de marque,
+# mais utilise un fond bordeaux très sombre au lieu du noir/bleu initial.
+[theme.dark]
+primaryColor = "#f8e7e9"
+linkColor = "#f8e7e9"
+
+# --burgundy-dark: #2d0410
+backgroundColor = "#2d0410"
+
+# Surface légèrement plus claire pour les widgets et la sidebar.
+secondaryBackgroundColor = "#4a0718"
+
+# --cream-light: #faf8f3
+textColor = "#faf8f3"
+
+# Bordeaux clair désaturé / bordure visible sur fond sombre.
+borderColor = "#6b1b31"
+dataframeBorderColor = "#6b1b31"
+
+greenColor = "#9fbd8e"
+redColor = "#f0808c"
