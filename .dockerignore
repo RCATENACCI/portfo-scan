@@ -1,0 +1,10 @@
+.git
+.github
+.devcontainer
+.venv
+venv
+__pycache__
+*.pyc
+.env
+.streamlit/secrets.toml
+.DS_Store
