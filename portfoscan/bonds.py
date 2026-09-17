@@ -54,7 +54,7 @@ _YIELD_CURVE_URL = (
     "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/{year}/all"
 )
 # home.treasury.gov blocks requests without a browser-like User-Agent.
-_BROWSER_HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; revoscope/1.0)"}
+_BROWSER_HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; portfoscan/1.0)"}
 
 _FREQUENCY_PER_YEAR = {
     "Monthly": 12,

@@ -1,4 +1,4 @@
-name: revoscope
+name: portfoscan
 channels:
   - conda-forge
 dependencies:

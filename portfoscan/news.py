@@ -1,6 +1,6 @@
 """Macro/economy news and per-holding news — for the News tab.
 
-Two free, no-API-key sources, in keeping with the rest of revoscope:
+Two free, no-API-key sources, in keeping with the rest of portfoscan:
 
 - Headlines (both the macro overview and the per-ticker portfolio news) come
   from Yahoo Finance via yfinance: `yf.Search(...).news` for topic search

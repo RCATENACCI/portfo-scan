@@ -91,7 +91,7 @@ def load_transactions(csv_path: str) -> pd.DataFrame:
 
 
 def find_unknown_types(transactions: pd.DataFrame) -> list[str]:
-    """Transaction types this file uses that revoscope doesn't recognize.
+    """Transaction types this file uses that portfoscan doesn't recognize.
 
     New Revolut transaction types (or an export from an account with
     instruments/features this app hasn't seen yet) would otherwise be

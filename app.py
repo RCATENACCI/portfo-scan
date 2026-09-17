@@ -1,4 +1,4 @@
-"""revoscope — interactive dashboard for a Revolut investing portfolio.
+"""portfoscan — interactive dashboard for a Revolut investing portfolio.
 
 Run with: streamlit run app.py
 """
@@ -11,7 +11,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
-from revoscope.bonds import (
+from portfoscan.bonds import (
     BOND_INCOME_TYPE,
     BOND_REDEMPTION_TYPE,
     build_cash_flow_schedule,
@@ -23,7 +23,7 @@ from revoscope.bonds import (
     isin_to_us_cusip,
     price_from_yield_curve,
 )
-from revoscope.news import (
+from portfoscan.news import (
     ECB_MEETINGS,
     ECB_SOURCE_URL,
     FOMC_MEETINGS,
@@ -37,8 +37,8 @@ from revoscope.news import (
     search_news_topics,
     time_ago,
 )
-from revoscope.parser import BUY_TYPES, SELL_TYPES, find_unknown_types, load_transactions
-from revoscope.performance import (
+from portfoscan.parser import BUY_TYPES, SELL_TYPES, find_unknown_types, load_transactions
+from portfoscan.performance import (
     BENCHMARK_NAME,
     BENCHMARK_TICKER,
     build_benchmark_shadow_series,
@@ -46,8 +46,8 @@ from revoscope.performance import (
     compute_beta,
     price_return_index,
 )
-from revoscope.portfolio import build_positions, cash_balance
-from revoscope.prices import (
+from portfoscan.portfolio import build_positions, cash_balance
+from portfoscan.prices import (
     ALL_SECTORS,
     get_company_names,
     get_live_prices,
@@ -59,7 +59,7 @@ from revoscope.prices import (
 DEFAULT_CSV = Path(__file__).parent / "data" / "raw" / "transactions.csv"
 EXAMPLE_CSV = Path(__file__).parent / "data" / "raw" / "example-portfolio.csv"
 
-st.set_page_config(page_title="revoscope", page_icon="📊", layout="wide")
+st.set_page_config(page_title="portfoscan", page_icon="📊", layout="wide")
 
 
 @st.cache_data
@@ -95,7 +95,7 @@ def style_fig(fig: go.Figure) -> go.Figure:
 
 
 # ---------------------------------------------------------------- sidebar --
-st.sidebar.title("📊 revoscope")
+st.sidebar.title("📊 portfoscan")
 st.sidebar.caption(
     "An interactive dashboard for your Revolut investing portfolio — P&L, "
     "allocation, and performance vs the S&P 500."
@@ -135,7 +135,7 @@ else:
 if using_example:
     st.info(
         "👀 **You're viewing an example portfolio** — real trades of mine, in companies I like, "
-        "shown here to demonstrate how revoscope works. Upload your own Revolut CSV in the sidebar "
+        "shown here to demonstrate how portfoscan works. Upload your own Revolut CSV in the sidebar "
         "to see your own data instead."
     )
 
@@ -144,7 +144,7 @@ transactions = _load(source)
 unknown_types = find_unknown_types(transactions)
 if unknown_types:
     st.warning(
-        f"Found transaction type(s) revoscope doesn't recognize yet: **{', '.join(unknown_types)}**. "
+        f"Found transaction type(s) portfoscan doesn't recognize yet: **{', '.join(unknown_types)}**. "
         "Those rows are skipped for now, so any positions/cash they affect may be understated. "
         "Let Elouan know (see sidebar) and they can be added."
     )

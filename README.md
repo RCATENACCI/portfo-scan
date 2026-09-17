@@ -1,4 +1,4 @@
-# revoscope
+# portfoscan
 
 An interactive local dashboard for a Revolut investing portfolio. Revolut has
 no personal API for account/portfolio data, so this works off the CSV
@@ -9,7 +9,7 @@ separately from Yahoo Finance via `yfinance`.
 
 ```bash
 conda env create -f environment-dev.yml
-conda activate revoscope
+conda activate portfoscan
 ```
 
 (`requirements.txt` is what Streamlit Community Cloud installs from for the
@@ -49,10 +49,10 @@ streamlit run app.py
 
 - Position accounting uses average cost basis (not FIFO/LIFO).
 - If a ticker doesn't resolve on Yahoo Finance, add a mapping in
-  `revoscope/prices.py::TICKER_OVERRIDES`.
+  `portfoscan/prices.py::TICKER_OVERRIDES`.
 - Live prices are cached for 5 minutes; use the sidebar's refresh button to
   force an update.
 - FOMC/ECB meeting dates in the News tab are a hand-maintained lookup table
-  (`revoscope/news.py::FOMC_MEETINGS` / `ECB_MEETINGS`) — extend it once the
+  (`portfoscan/news.py::FOMC_MEETINGS` / `ECB_MEETINGS`) — extend it once the
   next year's calendar is published; policy rates themselves are fetched
   live so they don't need updating.
